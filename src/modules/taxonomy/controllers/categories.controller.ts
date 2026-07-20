@@ -1,6 +1,6 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
 import { CategoriesService } from '../services/categories.service';
-import { CreateCategoryDto, UpdateCategoryDto } from '../dto/taxonomy.dto';
+import { CreateCategoryDto, UpdateCategoryDto, TaxonomyQueryDto } from '../dto/taxonomy.dto';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 
@@ -12,7 +12,7 @@ export class CategoriesController {
   constructor(private readonly service: CategoriesService) {}
 
   @Get()
-  findAll() { return this.service.findAll(); }
+  findAll(@Query() query: TaxonomyQueryDto) { return this.service.findAll(query); }
 
   @Get(':id')
   findOne(@Param('id') id: string) { return this.service.findOne(id); }

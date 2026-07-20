@@ -1,6 +1,6 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
 import { PublishersService } from '../services/publishers.service';
-import { CreatePublisherDto, UpdatePublisherDto } from '../dto/taxonomy.dto';
+import { CreatePublisherDto, UpdatePublisherDto, TaxonomyQueryDto } from '../dto/taxonomy.dto';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 
@@ -12,7 +12,7 @@ export class PublishersController {
   constructor(private readonly service: PublishersService) {}
 
   @Get()
-  findAll() { return this.service.findAll(); }
+  findAll(@Query() query: TaxonomyQueryDto) { return this.service.findAll(query); }
 
   @Get(':id')
   findOne(@Param('id') id: string) { return this.service.findOne(id); }

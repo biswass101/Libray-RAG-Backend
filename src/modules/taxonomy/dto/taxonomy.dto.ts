@@ -1,5 +1,14 @@
-import { IsString, IsOptional } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import { IsString, IsOptional, IsInt } from 'class-validator';
+import { Type } from 'class-transformer';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+
+export class TaxonomyQueryDto {
+  @ApiPropertyOptional() @IsOptional() @IsString() search?: string;
+  @ApiPropertyOptional() @IsOptional() @Type(() => Number) @IsInt() page?: number = 1;
+  @ApiPropertyOptional() @IsOptional() @Type(() => Number) @IsInt() pageSize?: number = 10;
+  @ApiPropertyOptional() @IsOptional() @IsString() sortBy?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() sortDir?: 'asc' | 'desc';
+}
 
 export class CreateCategoryDto {
   @ApiProperty()
