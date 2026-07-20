@@ -1,0 +1,254 @@
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [vector]
+}
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+// ---------------------------------------------------------
+// AUTHENTICATION & RBAC
+// ---------------------------------------------------------
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  name      String
+  phone     String?
+  bio       String?
+  roleId    String
+  role      Role     @relation(fields: [roleId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  activities Activity[]
+  documents  Document[]
+}
+
+model Role {
+  id          String           @id @default(uuid())
+  name        String           @unique
+  description String?
+  users       User[]
+  permissions RolePermission[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+}
+
+model Permission {
+  id          String           @id @default(uuid())
+  action      String           // e.g., "create:book", "read:member"
+  description String?
+  roles       RolePermission[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+}
+
+// ---------------------------------------------------------
+// TAXONOMY & INVENTORY
+// ---------------------------------------------------------
+
+model Category {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  books       Book[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Author {
+  id        String   @id @default(uuid())
+  name      String
+  country   String?
+  bio       String?
+  books     Book[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Publisher {
+  id        String   @id @default(uuid())
+  name      String
+  website   String?
+  address   String?
+  books     Book[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Book {
+  id              String   @id @default(uuid())
+  title           String
+  isbn            String   @unique
+  categoryId      String
+  authorId        String
+  publisherId     String
+  publishedYear   Int
+  totalCopies     Int      @default(1)
+  availableCopies Int      @default(1)
+  shelfLocation   String?
+  language        String   @default("English")
+  pages           Int?
+  description     String?
+  coverColor      String?
+  rating          Float    @default(0.0)
+  borrowCount     Int      @default(0)
+  
+  category  Category  @relation(fields: [categoryId], references: [id])
+  author    Author    @relation(fields: [authorId], references: [id])
+  publisher Publisher @relation(fields: [publisherId], references: [id])
+  
+  borrows      Borrow[]
+  reservations Reservation[]
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ---------------------------------------------------------
+// MEMBERS
+// ---------------------------------------------------------
+
+model Member {
+  id               String   @id @default(uuid())
+  name             String
+  email            String   @unique
+  phone            String?
+  address          String?
+  plan             String   @default("standard") // standard, premium, student
+  status           String   @default("active")   // active, suspended, expired
+  joinedAt         DateTime @default(now())
+  expiresAt        DateTime
+  activeBorrows    Int      @default(0)
+  totalBorrows     Int      @default(0)
+  outstandingFines Float    @default(0)
+  
+  borrows      Borrow[]
+  reservations Reservation[]
+  fines        Fine[]
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ---------------------------------------------------------
+// CIRCULATION
+// ---------------------------------------------------------
+
+model Borrow {
+  id         String    @id @default(uuid())
+  bookId     String
+  memberId   String
+  issuedAt   DateTime  @default(now())
+  dueAt      DateTime
+  returnedAt DateTime?
+  renewCount Int       @default(0)
+  status     String    @default("borrowed") // borrowed, returned, overdue, renewed
+  fineAmount Float     @default(0)
+  
+  book   Book   @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  fines  Fine[]
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Fine {
+  id       String @id @default(uuid())
+  borrowId String
+  memberId String
+  amount   Float
+  reason   String
+  status   String @default("unpaid") // unpaid, paid, waived
+  
+  borrow Borrow @relation(fields: [borrowId], references: [id], onDelete: Cascade)
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Reservation {
+  id            String   @id @default(uuid())
+  bookId        String
+  memberId      String
+  queuePosition Int      @default(0)
+  status        String   @default("pending") // pending, ready, fulfilled, cancelled, expired
+  expiresAt     DateTime
+  
+  book   Book   @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  
+  reservedAt DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+// ---------------------------------------------------------
+// RAG KNOWLEDGE BASE
+// ---------------------------------------------------------
+
+model Document {
+  id         String   @id @default(uuid())
+  name       String
+  type       String   // pdf, docx, txt, image
+  sizeBytes  Int
+  pages      Int?
+  status     String   @default("processing") // processing, indexed, failed
+  chunkCount Int      @default(0)
+  uploadedBy String
+  
+  user       User?    @relation(fields: [uploadedBy], references: [id], onDelete: SetNull)
+  chunks     DocumentChunk[]
+  
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model DocumentChunk {
+  id         String   @id @default(uuid())
+  documentId String
+  content    String
+  page       Int?
+  embedding  Unsupported("vector(1536)")? // OpenAI text-embedding-3-small/ada-002 dimension
+  
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+}
+
+// ---------------------------------------------------------
+// SYSTEM
+// ---------------------------------------------------------
+
+model Notification {
+  id        String   @id @default(uuid())
+  type      String   // overdue, reservation, due, member, fine, document, system
+  title     String
+  message   String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Activity {
+  id          String   @id @default(uuid())
+  type        String   // borrow, return, member, fine, book, reservation, document
+  title       String
+  description String
+  actorId     String?
+  actor       User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+}
