@@ -64,14 +64,17 @@ export class AuthService {
   private generateTokens(userId: string, email: string, name: string, role: string) {
     const payload = { sub: userId, email, role };
     
+    const accessExpiresIn = (this.configService.get<string>('JWT_ACCESS_EXPIRES_IN') || '7d') as any;
+    const refreshExpiresIn = (this.configService.get<string>('JWT_REFRESH_EXPIRES_IN') || '15d') as any;
+
     const accessToken = this.jwtService.sign(payload, {
       secret: this.configService.get<string>('JWT_ACCESS_SECRET') as string,
-      expiresIn: '15m',
+      expiresIn: accessExpiresIn,
     });
     
     const refreshToken = this.jwtService.sign(payload, {
       secret: this.configService.get<string>('JWT_REFRESH_SECRET') as string,
-      expiresIn: '7d',
+      expiresIn: refreshExpiresIn,
     });
 
     return {

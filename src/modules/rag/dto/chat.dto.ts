@@ -9,6 +9,6 @@ export class ChatDto {
 
   @ApiPropertyOptional({ description: 'Optional conversation ID for history tracking' })
   @IsOptional()
-  @IsUUID()
+  @IsString()
   conversationId?: string;
 }

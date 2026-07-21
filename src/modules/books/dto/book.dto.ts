@@ -13,6 +13,7 @@ export class CreateBookDto {
   @ApiProperty() @IsUUID() publisherId: string;
   @ApiProperty() @IsInt() @Type(() => Number) publishedYear: number;
   @ApiProperty() @IsInt() @Min(1) @Type(() => Number) totalCopies: number;
+  @ApiPropertyOptional() @IsOptional() @IsInt() @Min(0) @Type(() => Number) availableCopies: number
   @ApiPropertyOptional() @IsOptional() @IsString() shelfLocation?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() language?: string;
   @ApiPropertyOptional() @IsOptional() @IsInt() @Type(() => Number) pages?: number;
@@ -20,7 +21,7 @@ export class CreateBookDto {
   @ApiPropertyOptional() @IsOptional() @IsString() coverColor?: string;
 }
 
-export class UpdateBookDto extends PartialType(CreateBookDto) {}
+export class UpdateBookDto extends PartialType(CreateBookDto) { }
 
 export class BookQueryDto {
   @ApiPropertyOptional() @IsOptional() @IsString() search?: string;

@@ -65,10 +65,11 @@ export class BooksService {
   }
 
   async create(dto: CreateBookDto) {
+    const { availableCopies, ...rest } = dto;
     return this.prisma.book.create({
       data: {
-        ...dto,
-        availableCopies: dto.totalCopies,
+        ...rest,
+        availableCopies: availableCopies ?? dto.totalCopies,
       },
       include: { author: true, category: true, publisher: true },
     });

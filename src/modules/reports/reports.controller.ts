@@ -67,6 +67,30 @@ export class ReportsController {
     return this.reportsService.getBorrowStats(year ? +year : undefined);
   }
 
+  @Get('borrows')
+  @ApiOperation({ summary: 'Get aggregated borrow report (trend, by status, recent rows)' })
+  getBorrowReport() {
+    return this.reportsService.getBorrowReport();
+  }
+
+  @Get('members')
+  @ApiOperation({ summary: 'Get aggregated member report (by plan, by status, growth, top)' })
+  getMemberReport() {
+    return this.reportsService.getMemberReport();
+  }
+
+  @Get('books')
+  @ApiOperation({ summary: 'Get aggregated book report (by category, top, low stock)' })
+  getBookReport() {
+    return this.reportsService.getBookReport();
+  }
+
+  @Get('fines')
+  @ApiOperation({ summary: 'Get aggregated fine report (totals, by status, monthly, recent rows)' })
+  getFineReport() {
+    return this.reportsService.getFineReport();
+  }
+
   @Get('fines/stats')
   @ApiOperation({ summary: 'Get fine collection statistics' })
   getFineStats() {

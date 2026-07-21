@@ -224,7 +224,7 @@ model DocumentChunk {
   documentId String
   content    String
   page       Int?
-  embedding  Unsupported("vector(1536)")? // OpenAI text-embedding-3-small/ada-002 dimension
+  embedding  Unsupported("vector")?
   
   document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
 }

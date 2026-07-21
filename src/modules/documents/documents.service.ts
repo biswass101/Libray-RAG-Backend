@@ -23,6 +23,7 @@ export class DocumentsService {
         skip: (page - 1) * pageSize,
         take: pageSize,
         orderBy: { createdAt: 'desc' },
+        include: { user: { select: { name: true } } },
       }),
       this.prisma.document.count({ where }),
     ]);

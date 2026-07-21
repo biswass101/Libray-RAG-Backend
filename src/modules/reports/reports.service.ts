@@ -180,6 +180,107 @@ export class ReportsService {
     return { total, returned, active: total - returned, overdue, finesTotal: finesTotal._sum.amount ?? 0 };
   }
 
+  async getBorrowReport() {
+    const [trend, byStatusRaw, rows] = await Promise.all([
+      this.getBorrowTrend(),
+      this.prisma.borrow.groupBy({ by: ['status'], _count: { _all: true } }),
+      this.prisma.borrow.findMany({
+        orderBy: { issuedAt: 'desc' },
+        take: 20,
+        include: {
+          book: { select: { title: true } },
+          member: { select: { name: true } },
+        },
+      }),
+    ]);
+
+    return {
+      trend,
+      byStatus: byStatusRaw.map((s) => ({ name: s.status, value: s._count._all })),
+      rows,
+    };
+  }
+
+  async getMemberReport() {
+    const [byPlanRaw, byStatusRaw, growth, top] = await Promise.all([
+      this.prisma.member.groupBy({ by: ['plan'], _count: { _all: true } }),
+      this.prisma.member.groupBy({ by: ['status'], _count: { _all: true } }),
+      this.getMonthlyStats(),
+      this.getActiveMembers(10),
+    ]);
+
+    return {
+      byPlan: byPlanRaw.map((p) => ({ name: p.plan, value: p._count._all })),
+      byStatus: byStatusRaw.map((s) => ({ name: s.status, value: s._count._all })),
+      growth,
+      top,
+    };
+  }
+
+  async getBookReport() {
+    const [categories, top, lowStock] = await Promise.all([
+      this.prisma.category.findMany({
+        include: { _count: { select: { books: true } } },
+      }),
+      this.getTopBorrowedBooks(10),
+      this.prisma.book.findMany({
+        where: { availableCopies: { lte: 2 } },
+        include: { category: { select: { name: true } } },
+        orderBy: { availableCopies: 'asc' },
+        take: 20,
+      }),
+    ]);
+
+    return {
+      byCategory: categories
+        .map((c) => ({ name: c.name, value: c._count.books }))
+        .filter((c) => c.value > 0)
+        .sort((a, b) => b.value - a.value),
+      top,
+      lowStock,
+    };
+  }
+
+  async getFineReport() {
+    const stats = await this.getFineStats();
+
+    const months = 6;
+    const monthly = [];
+    for (let i = months - 1; i >= 0; i--) {
+      const date = subMonths(new Date(), i);
+      const collected = await this.prisma.fine.aggregate({
+        _sum: { amount: true },
+        where: {
+          status: 'paid',
+          createdAt: { gte: startOfMonth(date), lte: endOfMonth(date) },
+        },
+      });
+      monthly.push({ month: format(date, 'MMM yy'), finesCollected: collected._sum.amount ?? 0 });
+    }
+
+    const rows = await this.prisma.fine.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+      include: {
+        member: { select: { name: true } },
+        borrow: { include: { book: { select: { title: true } } } },
+      },
+    });
+
+    return {
+      total: stats.total,
+      collected: stats.collected,
+      outstanding: stats.unpaid,
+      byStatus: [
+        { name: 'paid', value: stats.collected },
+        { name: 'unpaid', value: stats.unpaid },
+        { name: 'waived', value: stats.waived },
+      ].filter((s) => s.value > 0),
+      monthly,
+      rows,
+    };
+  }
+
   async getFineStats() {
     const [total, collected, unpaid, waived] = await Promise.all([
       this.prisma.fine.aggregate({ _sum: { amount: true } }),
