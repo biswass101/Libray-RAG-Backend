@@ -1,6 +1,6 @@
 import {
   IsString, IsNotEmpty, IsOptional, IsInt, IsNumber,
-  Min, Max, IsUUID, IsHexColor
+  Min, Max, IsUUID, IsHexColor, IsBoolean,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
@@ -15,6 +15,7 @@ export class CreateBookDto {
   @ApiProperty() @IsInt() @Min(1) @Type(() => Number) totalCopies: number;
   @ApiPropertyOptional() @IsOptional() @IsInt() @Min(0) @Type(() => Number) availableCopies: number
   @ApiPropertyOptional() @IsOptional() @IsString() shelfLocation?: string;
+  @ApiPropertyOptional() @IsOptional() @IsUUID() shelfSlotId?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() language?: string;
   @ApiPropertyOptional() @IsOptional() @IsInt() @Type(() => Number) pages?: number;
   @ApiPropertyOptional() @IsOptional() @IsString() description?: string;
@@ -22,6 +23,16 @@ export class CreateBookDto {
 }
 
 export class UpdateBookDto extends PartialType(CreateBookDto) { }
+
+export class CreateShelfSlotDto {
+  @ApiProperty() @IsString() @IsNotEmpty() code: string;
+  @ApiProperty() @IsString() @IsNotEmpty() label: string;
+  @ApiPropertyOptional() @IsOptional() @IsInt() @Min(1) @Type(() => Number) capacity?: number;
+  @ApiPropertyOptional() @IsOptional() @IsString() description?: string;
+  @ApiPropertyOptional() @IsOptional() @IsBoolean() active?: boolean;
+}
+
+export class UpdateShelfSlotDto extends PartialType(CreateShelfSlotDto) { }
 
 export class BookQueryDto {
   @ApiPropertyOptional() @IsOptional() @IsString() search?: string;

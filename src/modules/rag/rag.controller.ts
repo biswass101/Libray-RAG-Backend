@@ -35,6 +35,6 @@ export class RagController {
     },
   })
   chat(@Body() dto: ChatDto) {
-    return this.ragService.chat(dto.question);
+    return this.ragService.chat(dto.question, dto.history);
   }
 }

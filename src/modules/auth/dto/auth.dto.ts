@@ -27,3 +27,15 @@ export class RegisterDto {
   @IsNotEmpty()
   name: string;
 }
+
+export class ChangePasswordDto {
+  @ApiProperty({ example: 'current-password' })
+  @IsString()
+  @IsNotEmpty()
+  currentPassword: string;
+
+  @ApiProperty({ example: 'new-password-123' })
+  @IsString()
+  @MinLength(6)
+  newPassword: string;
+}

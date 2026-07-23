@@ -85,12 +85,31 @@ async function main() {
     publishers.push(existing ?? (await prisma.publisher.create({ data: p })));
   }
 
+  // ─── SHELF SLOTS (create before books) ─────────────────────────────────────────
+  const shelfSlotSpecs = [
+    { code: 'A-01', label: 'North wall - Upper', capacity: 4, description: 'Premium display shelf' },
+    { code: 'A-02', label: 'North wall - Lower', capacity: 5, description: 'High-traffic shelf' },
+    { code: 'B-01', label: 'East wall - Upper', capacity: 4, description: 'Fiction section' },
+    { code: 'B-02', label: 'East wall - Lower', capacity: 6, description: 'Large book storage' },
+    { code: 'C-01', label: 'South wall', capacity: 4, description: 'Reference materials' },
+  ];
+  const shelfSlots = await Promise.all(
+    shelfSlotSpecs.map((s) =>
+      prisma.shelfSlot.upsert({
+        where: { code: s.code },
+        update: {},
+        create: s,
+      }),
+    ),
+  );
+  const slotByCode = Object.fromEntries(shelfSlots.map((s) => [s.code, s]));
+
   const bookSpecs = [
     {
       title: 'The Left Hand of Darkness', isbn: '978-0441478125',
       category: 'Sci-Fi', author: 'Ursula K. Le Guin', publisher: 0,
       publishedYear: 1969, totalCopies: 5, availableCopies: 4,
-      shelfLocation: 'A1-03', pages: 304, coverColor: '#4f46e5',
+      shelfSlot: 'A-01', shelfLocation: 'A-01', pages: 304, coverColor: '#4f46e5',
       description: 'A lone envoy on the planet Winter navigates politics and gender.',
       rating: 4.6,
     },
@@ -98,7 +117,7 @@ async function main() {
       title: 'Foundation', isbn: '978-0553293357',
       category: 'Sci-Fi', author: 'Isaac Asimov', publisher: 0,
       publishedYear: 1951, totalCopies: 4, availableCopies: 2,
-      shelfLocation: 'A1-07', pages: 255, coverColor: '#0ea5e9',
+      shelfSlot: 'A-01', shelfLocation: 'A-01', pages: 255, coverColor: '#0ea5e9',
       description: 'The fall of a galactic empire and the science of psychohistory.',
       rating: 4.4,
     },
@@ -106,7 +125,7 @@ async function main() {
       title: 'A Wizard of Earthsea', isbn: '978-0547773742',
       category: 'Fantasy', author: 'Ursula K. Le Guin', publisher: 1,
       publishedYear: 1968, totalCopies: 3, availableCopies: 3,
-      shelfLocation: 'B2-11', pages: 183, coverColor: '#059669',
+      shelfSlot: 'B-01', shelfLocation: 'B-01', pages: 183, coverColor: '#059669',
       description: 'Young Ged learns the true cost of power at the school of wizardry.',
       rating: 4.3,
     },
@@ -114,7 +133,7 @@ async function main() {
       title: 'Murder on the Orient Express', isbn: '978-0062693662',
       category: 'Mystery', author: 'Agatha Christie', publisher: 1,
       publishedYear: 1934, totalCopies: 6, availableCopies: 5,
-      shelfLocation: 'C3-02', pages: 256, coverColor: '#dc2626',
+      shelfSlot: 'B-01', shelfLocation: 'B-01', pages: 256, coverColor: '#dc2626',
       description: 'Hercule Poirot untangles a murder aboard a snowbound train.',
       rating: 4.5,
     },
@@ -122,13 +141,13 @@ async function main() {
       title: 'Sapiens: A Brief History of Humankind', isbn: '978-0062316097',
       category: 'Non-Fiction', author: 'Yuval Noah Harari', publisher: 1,
       publishedYear: 2011, totalCopies: 2, availableCopies: 0,
-      shelfLocation: 'D1-05', pages: 443, coverColor: '#d97706',
+      shelfSlot: 'C-01', shelfLocation: 'C-01', pages: 443, coverColor: '#d97706',
       description: 'How Homo sapiens came to dominate the planet.',
       rating: 4.7,
     },
   ];
   const books = await Promise.all(
-    bookSpecs.map(({ category, author, publisher, ...b }) =>
+    bookSpecs.map(({ category, author, publisher, shelfSlot, ...b }) =>
       prisma.book.upsert({
         where: { isbn: b.isbn },
         update: {},
@@ -137,6 +156,7 @@ async function main() {
           categoryId: catByName[category].id,
           authorId: authByName[author].id,
           publisherId: publishers[publisher].id,
+          shelfSlotId: shelfSlot ? slotByCode[shelfSlot].id : undefined,
         },
       }),
     ),
@@ -274,7 +294,7 @@ async function main() {
 
   console.log(
     `Demo data ready: ${categories.length} categories, ${authors.length} authors, ` +
-    `${publishers.length} publishers, ${books.length} books, ${members.length} members.`,
+    `${publishers.length} publishers, ${shelfSlots.length} shelf slots, ${books.length} books, ${members.length} members.`,
   );
 }
 

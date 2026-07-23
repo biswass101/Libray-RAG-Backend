@@ -11,4 +11,11 @@ export class ChatDto {
   @IsOptional()
   @IsString()
   conversationId?: string;
+
+  @ApiPropertyOptional({
+    description: 'Recent conversation turns to use as context for follow-up questions',
+    example: [{ role: 'user', content: 'Tell me about The Hobbit' }],
+  })
+  @IsOptional()
+  history?: Array<{ role: string; content: string }>;
 }

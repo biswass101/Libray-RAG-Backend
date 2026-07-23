@@ -90,6 +90,19 @@ model Publisher {
   updatedAt DateTime @updatedAt
 }
 
+model ShelfSlot {
+  id          String   @id @default(uuid())
+  code        String   @unique
+  label       String
+  capacity    Int      @default(4)
+  description String?
+  active      Boolean  @default(true)
+  books       Book[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 model Book {
   id              String   @id @default(uuid())
   title           String
@@ -101,6 +114,7 @@ model Book {
   totalCopies     Int      @default(1)
   availableCopies Int      @default(1)
   shelfLocation   String?
+  shelfSlotId     String?
   language        String   @default("English")
   pages           Int?
   description     String?
@@ -111,6 +125,7 @@ model Book {
   category  Category  @relation(fields: [categoryId], references: [id])
   author    Author    @relation(fields: [authorId], references: [id])
   publisher Publisher @relation(fields: [publisherId], references: [id])
+  shelfSlot ShelfSlot? @relation(fields: [shelfSlotId], references: [id])
   
   borrows      Borrow[]
   reservations Reservation[]
@@ -224,7 +239,7 @@ model DocumentChunk {
   documentId String
   content    String
   page       Int?
-  embedding  Unsupported("vector")?
+  embedding  Unsupported("vector(1536)")?
   
   document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
 }

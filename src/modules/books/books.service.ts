@@ -1,6 +1,12 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
-import { CreateBookDto, UpdateBookDto, BookQueryDto } from './dto/book.dto';
+import {
+  CreateBookDto,
+  UpdateBookDto,
+  BookQueryDto,
+  CreateShelfSlotDto,
+  UpdateShelfSlotDto,
+} from './dto/book.dto';
 import { Prisma } from '@prisma/client';
 
 @Injectable()
@@ -34,6 +40,7 @@ export class BooksService {
           author: { select: { id: true, name: true } },
           category: { select: { id: true, name: true } },
           publisher: { select: { id: true, name: true } },
+          shelfSlot: { select: { id: true, code: true, label: true, capacity: true, description: true, active: true } },
         },
         skip: (page - 1) * pageSize,
         take: pageSize,
@@ -58,6 +65,7 @@ export class BooksService {
         author: true,
         category: true,
         publisher: true,
+        shelfSlot: true,
       },
     });
     if (!book) throw new NotFoundException(`Book #${id} not found`);
@@ -65,10 +73,23 @@ export class BooksService {
   }
 
   async create(dto: CreateBookDto) {
-    const { availableCopies, ...rest } = dto;
+    const { availableCopies, shelfSlotId, ...rest } = dto;
+
+    if (shelfSlotId) {
+      const slot = await this.prisma.shelfSlot.findUnique({
+        where: { id: shelfSlotId },
+        include: { books: true },
+      });
+      if (!slot) throw new NotFoundException(`Shelf slot #${shelfSlotId} not found`);
+      if (slot.books.length >= slot.capacity) {
+        throw new BadRequestException(`Shelf slot ${slot.code} is at capacity`);
+      }
+    }
+
     return this.prisma.book.create({
       data: {
         ...rest,
+        shelfSlotId,
         availableCopies: availableCopies ?? dto.totalCopies,
       },
       include: { author: true, category: true, publisher: true },
@@ -76,7 +97,20 @@ export class BooksService {
   }
 
   async update(id: string, dto: UpdateBookDto) {
-    await this.findOne(id);
+    const book = await this.findOne(id);
+
+    if (dto.shelfSlotId && dto.shelfSlotId !== book.shelfSlotId) {
+      const slot = await this.prisma.shelfSlot.findUnique({
+        where: { id: dto.shelfSlotId },
+        include: { books: true },
+      });
+      if (!slot) throw new NotFoundException(`Shelf slot #${dto.shelfSlotId} not found`);
+      const usedSpace = slot.books.filter((b) => b.id !== id).length;
+      if (usedSpace >= slot.capacity) {
+        throw new BadRequestException(`Shelf slot ${slot.code} is at capacity`);
+      }
+    }
+
     return this.prisma.book.update({
       where: { id },
       data: dto,
@@ -87,6 +121,36 @@ export class BooksService {
   async remove(id: string) {
     await this.findOne(id);
     return this.prisma.book.delete({ where: { id } });
+  }
+
+  async listShelfSlots() {
+    const slots = await this.prisma.shelfSlot.findMany({
+      where: { active: true },
+      orderBy: { code: 'asc' },
+      include: { books: { select: { id: true, title: true, availableCopies: true } } },
+    });
+
+    return slots.map((slot) => ({
+      ...slot,
+      used: slot.books.length,
+      available: Math.max(0, slot.capacity - slot.books.length),
+    }));
+  }
+
+  async createShelfSlot(dto: CreateShelfSlotDto) {
+    return this.prisma.shelfSlot.create({ data: dto });
+  }
+
+  async updateShelfSlot(id: string, dto: UpdateShelfSlotDto) {
+    const slot = await this.prisma.shelfSlot.findUnique({ where: { id } });
+    if (!slot) throw new NotFoundException(`Shelf slot #${id} not found`);
+    return this.prisma.shelfSlot.update({ where: { id }, data: dto });
+  }
+
+  async removeShelfSlot(id: string) {
+    const slot = await this.prisma.shelfSlot.findUnique({ where: { id } });
+    if (!slot) throw new NotFoundException(`Shelf slot #${id} not found`);
+    return this.prisma.shelfSlot.update({ where: { id }, data: { active: false } });
   }
 
   async getBorrowHistory(id: string) {
