@@ -40,7 +40,12 @@ export class BooksService {
           author: { select: { id: true, name: true } },
           category: { select: { id: true, name: true } },
           publisher: { select: { id: true, name: true } },
-          shelfSlot: { select: { id: true, code: true, label: true, capacity: true, description: true, active: true } },
+          shelfSlot: {
+            select: {
+              id: true, code: true, label: true, capacity: true, description: true, active: true,
+              books: { select: { id: true } }
+            }
+          },
         },
         skip: (page - 1) * pageSize,
         take: pageSize,
@@ -49,8 +54,24 @@ export class BooksService {
       this.prisma.book.count({ where }),
     ]);
 
+    const itemsWithShelfInfo = items.map(item => {
+      if (item.shelfSlot) {
+        const used = item.shelfSlot.books?.length ?? 0;
+        return {
+          ...item,
+          shelfSlot: {
+            ...item.shelfSlot,
+            used,
+            available: Math.max(0, item.shelfSlot.capacity - used),
+            books: undefined,
+          }
+        };
+      }
+      return item;
+    });
+
     return {
-      items,
+      items: itemsWithShelfInfo,
       total,
       page,
       pageSize,
@@ -81,6 +102,7 @@ export class BooksService {
         include: { books: true },
       });
       if (!slot) throw new NotFoundException(`Shelf slot #${shelfSlotId} not found`);
+      if (!slot.active) throw new BadRequestException(`Shelf slot ${slot.code} is inactive`);
       if (slot.books.length >= slot.capacity) {
         throw new BadRequestException(`Shelf slot ${slot.code} is at capacity`);
       }
@@ -105,6 +127,7 @@ export class BooksService {
         include: { books: true },
       });
       if (!slot) throw new NotFoundException(`Shelf slot #${dto.shelfSlotId} not found`);
+      if (!slot.active) throw new BadRequestException(`Shelf slot ${slot.code} is inactive`);
       const usedSpace = slot.books.filter((b) => b.id !== id).length;
       if (usedSpace >= slot.capacity) {
         throw new BadRequestException(`Shelf slot ${slot.code} is at capacity`);
