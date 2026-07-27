@@ -1,0 +1,117 @@
+import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
+import { PrismaService } from '../../common/prisma/prisma.service';
+import * as bcrypt from 'bcrypt';
+import { ChangePasswordDto, LoginDto, RegisterDto } from './dto/auth.dto';
+import { ConfigService } from '@nestjs/config';
+
+@Injectable()
+export class AuthService {
+  constructor(
+    private prisma: PrismaService,
+    private jwtService: JwtService,
+    private configService: ConfigService,
+  ) {}
+
+  async login(loginDto: LoginDto) {
+    const user = await this.prisma.user.findUnique({
+      where: { email: loginDto.email },
+      include: { role: true }
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    const isPasswordValid = await bcrypt.compare(loginDto.password, user.password);
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    return this.generateTokens(user.id, user.email, user.name, user.role.name);
+  }
+
+  async register(registerDto: RegisterDto) {
+    const existingUser = await this.prisma.user.findUnique({
+      where: { email: registerDto.email }
+    });
+
+    if (existingUser) {
+      throw new BadRequestException('Email already in use');
+    }
+
+    // Default to 'member' role if exists, otherwise create it
+    let defaultRole = await this.prisma.role.findUnique({ where: { name: 'admin' } });
+    if (!defaultRole) {
+      defaultRole = await this.prisma.role.create({
+        data: { name: 'admin', description: 'System Administrator' }
+      });
+    }
+
+    const hashedPassword = await bcrypt.hash(registerDto.password, 10);
+    const user = await this.prisma.user.create({
+      data: {
+        email: registerDto.email,
+        password: hashedPassword,
+        name: registerDto.name,
+        roleId: defaultRole.id
+      }
+    });
+
+    return this.generateTokens(user.id, user.email, user.name, defaultRole.name);
+  }
+
+  async changePassword(userId: string, changePasswordDto: ChangePasswordDto) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    const isCurrentPasswordValid = await bcrypt.compare(changePasswordDto.currentPassword, user.password);
+    if (!isCurrentPasswordValid) {
+      throw new UnauthorizedException('Current password is incorrect');
+    }
+
+    const isSameAsCurrent = await bcrypt.compare(changePasswordDto.newPassword, user.password);
+    if (isSameAsCurrent) {
+      throw new BadRequestException('New password must be different from the current password');
+    }
+
+    const hashedPassword = await bcrypt.hash(changePasswordDto.newPassword, 10);
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { password: hashedPassword },
+    });
+
+    return { message: 'Password updated successfully' };
+  }
+
+  private generateTokens(userId: string, email: string, name: string, role: string) {
+    const payload = { sub: userId, email, role };
+    
+    const accessExpiresIn = (this.configService.get<string>('JWT_ACCESS_EXPIRES_IN') || '7d') as any;
+    const refreshExpiresIn = (this.configService.get<string>('JWT_REFRESH_EXPIRES_IN') || '15d') as any;
+
+    const accessToken = this.jwtService.sign(payload, {
+      secret: this.configService.get<string>('JWT_ACCESS_SECRET') as string,
+      expiresIn: accessExpiresIn,
+    });
+    
+    const refreshToken = this.jwtService.sign(payload, {
+      secret: this.configService.get<string>('JWT_REFRESH_SECRET') as string,
+      expiresIn: refreshExpiresIn,
+    });
+
+    return {
+      accessToken,
+      refreshToken,
+      user: {
+        id: userId,
+        email,
+        name,
+        role
+      }
+    };
+  }
+}
