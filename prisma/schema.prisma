@@ -14,19 +14,20 @@ generator client {
 // ---------------------------------------------------------
 
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  password  String
-  name      String
-  phone     String?
-  bio       String?
-  roleId    String
-  role      Role     @relation(fields: [roleId], references: [id])
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  
-  activities Activity[]
-  documents  Document[]
+  id            String   @id @default(uuid())
+  email         String   @unique
+  password      String
+  name          String
+  phone         String?
+  bio           String?
+  roleId        String
+  role          Role     @relation(fields: [roleId], references: [id])
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  activities    Activity[]
+  documents     Document[]
+  conversations Conversation[]
 }
 
 model Role {
@@ -242,6 +243,31 @@ model DocumentChunk {
   embedding  Unsupported("vector(1536)")?
   
   document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+}
+
+// ---------------------------------------------------------
+// RAG CONVERSATIONS (user-specific chat history)
+// ---------------------------------------------------------
+
+model Conversation {
+  id        String   @id @default(uuid())
+  userId    String
+  title     String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages  ChatMessage[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ChatMessage {
+  id             String   @id @default(uuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role           String   // "user" or "assistant"
+  content        String
+
+  createdAt      DateTime @default(now())
 }
 
 // ---------------------------------------------------------

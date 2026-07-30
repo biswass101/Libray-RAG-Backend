@@ -9,6 +9,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { DocumentsService } from './documents.service';
 import { RagService } from '../rag/rag.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import {
   ApiTags, ApiBearerAuth, ApiOperation, ApiConsumes, ApiBody,
@@ -25,7 +27,7 @@ const ALLOWED_MIMETYPES = [
 
 @ApiTags('Documents')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('documents')
 export class DocumentsController {
   constructor(
@@ -50,6 +52,7 @@ export class DocumentsController {
   }
 
   @Post()
+  @Roles('admin', 'librarian')
   @ApiOperation({ summary: 'Upload a document (PDF, DOCX, TXT, Image)' })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
@@ -94,6 +97,7 @@ export class DocumentsController {
   }
 
   @Delete(':id')
+  @Roles('admin', 'librarian')
   @ApiOperation({ summary: 'Delete a document and its vector embeddings' })
   remove(@Param('id') id: string) {
     return this.documentsService.remove(id);

@@ -29,7 +29,17 @@ async function main() {
     },
   });
 
+  const demoRole = await prisma.role.upsert({
+    where: { name: 'demo' },
+    update: {},
+    create: {
+      name: 'demo',
+      description: 'Demo Account (Read-Only + Chat)',
+    },
+  });
+
   const hash = await bcrypt.hash('admin123', 10);
+  const demoHash = await bcrypt.hash('demo123', 10);
 
   const admin = await prisma.user.upsert({
     where: { email: 'admin@libraryos.io' },
@@ -44,9 +54,27 @@ async function main() {
     },
   });
 
-  console.log('Seed completed. Admin User created:');
+  const demo = await prisma.user.upsert({
+    where: { email: 'demo@libraryos.demo' },
+    update: {
+      password: demoHash,
+    },
+    create: {
+      email: 'demo@libraryos.demo',
+      name: 'Demo Account',
+      password: demoHash,
+      roleId: demoRole.id,
+    },
+  });
+
+  console.log('Seed completed. User accounts created:');
+  console.log(`\n[Admin]`);
   console.log(`Email: ${admin.email}`);
   console.log(`Password: admin123`);
+  console.log(`\n[Demo - Share this for Resume/Portfolio]`);
+  console.log(`Email: ${demo.email}`);
+  console.log(`Password: demo123`);
+  console.log(`Permissions: Read-only access + Chat with AI`);
 
   // ─── DEMO DATA ─────────────────────────────────────────────────────────────
 

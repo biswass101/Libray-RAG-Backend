@@ -4,12 +4,14 @@ import {
 import { MembersService } from './members.service';
 import { CreateMemberDto, UpdateMemberDto, MemberQueryDto } from './dto/member.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { PLAN_CONSTRAINTS } from '../../common/config/plan-constraints';
 
 @ApiTags('Members')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('members')
 export class MembersController {
   constructor(private readonly membersService: MembersService) {}
@@ -45,18 +47,21 @@ export class MembersController {
   }
 
   @Post()
+  @Roles('admin', 'librarian')
   @ApiOperation({ summary: 'Register a new member' })
   create(@Body() dto: CreateMemberDto) {
     return this.membersService.create(dto);
   }
 
   @Put(':id')
+  @Roles('admin', 'librarian')
   @ApiOperation({ summary: 'Update a member' })
   update(@Param('id') id: string, @Body() dto: UpdateMemberDto) {
     return this.membersService.update(id, dto);
   }
 
   @Delete(':id')
+  @Roles('admin', 'librarian')
   @ApiOperation({ summary: 'Delete a member' })
   remove(@Param('id') id: string) {
     return this.membersService.remove(id);
