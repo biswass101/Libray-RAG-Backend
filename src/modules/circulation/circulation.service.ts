@@ -1,8 +1,6 @@
 import {
-  Injectable, NotFoundException, BadRequestException, ConflictException, Logger, Inject
+  Injectable, NotFoundException, BadRequestException, ConflictException, Logger
 } from '@nestjs/common';
-import { CACHE_MANAGER } from '@nestjs/cache-manager';
-import type { Cache } from 'cache-manager';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import {
   IssueBorrowDto, ReturnBorrowDto, CreateReservationDto,
@@ -16,10 +14,7 @@ import { getPlanConstraints } from '../../common/config/plan-constraints';
 export class CirculationService {
   private readonly logger = new Logger(CirculationService.name);
 
-  constructor(
-    private prisma: PrismaService,
-    @Inject(CACHE_MANAGER) private cache: Cache,
-  ) {}
+  constructor(private prisma: PrismaService) {}
 
   // ─── BORROWS ──────────────────────────────────────────────────────────────
 
@@ -395,17 +390,7 @@ export class CirculationService {
       }),
     ]);
 
-    await this.invalidateReportsCaches();
     return updatedFine;
-  }
-
-  private async invalidateReportsCaches() {
-    await Promise.all([
-      this.cache.del('reports:fine-report'),
-      this.cache.del('reports:fine-stats'),
-      this.cache.del('reports:dashboard:stats'),
-      this.cache.del('reports:monthly-stats'),
-    ]);
   }
 
   @Cron('*/5 * * * *')

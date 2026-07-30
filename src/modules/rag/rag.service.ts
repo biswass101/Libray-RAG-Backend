@@ -1,6 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
-import { CACHE_MANAGER } from '@nestjs/cache-manager';
-import type { Cache } from 'cache-manager';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { ConfigService } from '@nestjs/config';
 import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters';
@@ -19,7 +17,6 @@ export class RagService {
   constructor(
     private prisma: PrismaService,
     private config: ConfigService,
-    @Inject(CACHE_MANAGER) private cache: Cache,
   ) {
     const apiKey = this.config.get<string>('OPENROUTER_API_KEY') ?? '';
     this.model =
@@ -290,12 +287,7 @@ Answer:`;
   }
 
   private async getDataContext() {
-    const cacheKey = 'rag:data-context';
-    const cached = await this.cache.get<Awaited<ReturnType<typeof this._fetchDataContext>>>(cacheKey);
-    if (cached) return cached;
-    const result = await this._fetchDataContext();
-    await this.cache.set(cacheKey, result, 60_000); // 1 min
-    return result;
+    return this._fetchDataContext();
   }
 
   private async _fetchDataContext() {
