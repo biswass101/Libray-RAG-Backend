@@ -164,7 +164,6 @@ export class CirculationService {
     }
 
     const [updatedBorrow] = await this.prisma.$transaction(ops);
-    await this.invalidateReportsCaches();
     return updatedBorrow;
   }
 
@@ -212,7 +211,6 @@ export class CirculationService {
       },
     });
 
-    await this.invalidateReportsCaches();
     return updatedBorrow;
   }
 
@@ -409,7 +407,6 @@ export class CirculationService {
 
     if (result.count > 0) {
       this.logger.log(`Marked ${result.count} borrow(s) as overdue in database`);
-      await this.invalidateReportsCaches();
     }
   }
 
@@ -486,12 +483,11 @@ export class CirculationService {
             this.logger.log(`Updated fine for borrow ${borrow.id} by $${fineIncrease.toFixed(2)}`);
           }
         }
-      } catch (error) {
+      } catch (error: any) {
         this.logger.error(`Error processing overdue borrow ${borrow.id}: ${error.message}`);
       }
     }
 
     this.logger.log('Overdue fine processing completed');
-    await this.invalidateReportsCaches();
   }
 }
