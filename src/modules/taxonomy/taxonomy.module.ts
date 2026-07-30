@@ -6,8 +6,10 @@ import { PublishersController } from './controllers/publishers.controller';
 import { CategoriesService } from './services/categories.service';
 import { AuthorsService } from './services/authors.service';
 import { PublishersService } from './services/publishers.service';
+import { RagModule } from '../rag/rag.module';
 
 @Module({
+  imports: [RagModule],
   controllers: [CategoriesController, AuthorsController, PublishersController],
   providers: [CategoriesService, AuthorsService, PublishersService],
 })

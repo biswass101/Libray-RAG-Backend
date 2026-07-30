@@ -2,14 +2,11 @@ import { RagService } from './rag.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { ConfigService } from '@nestjs/config';
 
-const mockCache = { get: jest.fn(), set: jest.fn(), del: jest.fn(), clear: jest.fn() };
-
 describe('RagService data context', () => {
   it('builds a non-confidential library snapshot', () => {
     const service = new RagService(
       {} as PrismaService,
       { get: jest.fn() } as unknown as ConfigService,
-      mockCache as any,
     );
 
     const context = (service as any).buildDataContext({
@@ -44,7 +41,6 @@ describe('RagService data context', () => {
     const service = new RagService(
       {} as PrismaService,
       { get: jest.fn() } as unknown as ConfigService,
-      mockCache as any,
     );
 
     const prompt = (service as any).buildPrompt(

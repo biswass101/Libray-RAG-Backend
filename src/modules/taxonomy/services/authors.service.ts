@@ -2,10 +2,14 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { CreateAuthorDto, UpdateAuthorDto, TaxonomyQueryDto } from '../dto/taxonomy.dto';
 import { Prisma } from '@prisma/client';
+import { RagService } from '../../rag/rag.service';
 
 @Injectable()
 export class AuthorsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private ragService: RagService,
+  ) {}
 
   async findAll(query: TaxonomyQueryDto) {
     const { search, page = 1, pageSize = 10, sortBy = 'name', sortDir = 'asc' } = query;
@@ -44,14 +48,20 @@ export class AuthorsService {
   }
 
   async create(data: CreateAuthorDto) {
-    return this.prisma.author.create({ data });
+    const author = await this.prisma.author.create({ data });
+    this.ragService.embedAuthor(author).catch(() => {});
+    return author;
   }
 
   async update(id: string, data: UpdateAuthorDto) {
-    return this.prisma.author.update({ where: { id }, data });
+    const author = await this.prisma.author.update({ where: { id }, data });
+    this.ragService.embedAuthor(author).catch(() => {});
+    return author;
   }
 
   async remove(id: string) {
-    return this.prisma.author.delete({ where: { id } });
+    const deleted = await this.prisma.author.delete({ where: { id } });
+    this.ragService.removeEntityEmbedding('author', id).catch(() => {});
+    return deleted;
   }
 }

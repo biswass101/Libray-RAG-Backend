@@ -8,10 +8,14 @@ import {
   UpdateShelfSlotDto,
 } from './dto/book.dto';
 import { Prisma } from '@prisma/client';
+import { RagService } from '../rag/rag.service';
 
 @Injectable()
 export class BooksService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private ragService: RagService,
+  ) {}
 
   async findAll(query: BookQueryDto) {
     const {
@@ -108,7 +112,7 @@ export class BooksService {
       }
     }
 
-    return this.prisma.book.create({
+    const book = await this.prisma.book.create({
       data: {
         ...rest,
         shelfSlotId,
@@ -116,12 +120,21 @@ export class BooksService {
       },
       include: { author: true, category: true, publisher: true },
     });
+
+    this.ragService.embedBook({
+      ...book,
+      author: book.author ? { name: book.author.name } : null,
+      category: book.category ? { name: book.category.name } : null,
+      publisher: book.publisher ? { name: book.publisher.name } : null,
+    }).catch(() => {});
+
+    return book;
   }
 
   async update(id: string, dto: UpdateBookDto) {
-    const book = await this.findOne(id);
+    const existing = await this.findOne(id);
 
-    if (dto.shelfSlotId && dto.shelfSlotId !== book.shelfSlotId) {
+    if (dto.shelfSlotId && dto.shelfSlotId !== existing.shelfSlotId) {
       const slot = await this.prisma.shelfSlot.findUnique({
         where: { id: dto.shelfSlotId },
         include: { books: true },
@@ -134,16 +147,27 @@ export class BooksService {
       }
     }
 
-    return this.prisma.book.update({
+    const book = await this.prisma.book.update({
       where: { id },
       data: dto,
       include: { author: true, category: true, publisher: true },
     });
+
+    this.ragService.embedBook({
+      ...book,
+      author: book.author ? { name: book.author.name } : null,
+      category: book.category ? { name: book.category.name } : null,
+      publisher: book.publisher ? { name: book.publisher.name } : null,
+    }).catch(() => {});
+
+    return book;
   }
 
   async remove(id: string) {
     await this.findOne(id);
-    return this.prisma.book.delete({ where: { id } });
+    const deleted = await this.prisma.book.delete({ where: { id } });
+    this.ragService.removeEntityEmbedding('book', id).catch(() => {});
+    return deleted;
   }
 
   async listShelfSlots(includeInactive = true) {

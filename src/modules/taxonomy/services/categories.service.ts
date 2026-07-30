@@ -2,10 +2,14 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { CreateCategoryDto, UpdateCategoryDto, TaxonomyQueryDto } from '../dto/taxonomy.dto';
 import { Prisma } from '@prisma/client';
+import { RagService } from '../../rag/rag.service';
 
 @Injectable()
 export class CategoriesService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private ragService: RagService,
+  ) {}
 
   async findAll(query: TaxonomyQueryDto) {
     const { search, page = 1, pageSize = 10, sortBy = 'name', sortDir = 'asc' } = query;
@@ -44,14 +48,20 @@ export class CategoriesService {
   }
 
   async create(data: CreateCategoryDto) {
-    return this.prisma.category.create({ data });
+    const category = await this.prisma.category.create({ data });
+    this.ragService.embedCategory(category).catch(() => {});
+    return category;
   }
 
   async update(id: string, data: UpdateCategoryDto) {
-    return this.prisma.category.update({ where: { id }, data });
+    const category = await this.prisma.category.update({ where: { id }, data });
+    this.ragService.embedCategory(category).catch(() => {});
+    return category;
   }
 
   async remove(id: string) {
-    return this.prisma.category.delete({ where: { id } });
+    const deleted = await this.prisma.category.delete({ where: { id } });
+    this.ragService.removeEntityEmbedding('category', id).catch(() => {});
+    return deleted;
   }
 }

@@ -149,10 +149,13 @@ export class RagService {
     // 1. Embed the user question via OpenRouter
     const queryVector = await this.embedText(question);
 
-    // 2. Similarity search in pgvector (top 5 chunks)
-    let results: Record<string, unknown>[];
+    // 2. Similarity search in pgvector — search both DocumentChunk and KnowledgeChunk
+    let docResults: Record<string, unknown>[] = [];
+    let knowledgeResults: Record<string, unknown>[] = [];
+    const vectorJson = JSON.stringify(queryVector);
+
     try {
-      results = await this.prisma.$queryRawUnsafe(
+      docResults = await this.prisma.$queryRawUnsafe(
         `SELECT dc.id, dc.content, dc."documentId", dc.page,
                 1 - (dc.embedding <=> $1::vector) AS score,
                 d.name AS "documentName"
@@ -161,25 +164,35 @@ export class RagService {
          WHERE dc.embedding IS NOT NULL
          ORDER BY dc.embedding <=> $1::vector
          LIMIT 5`,
-        JSON.stringify(queryVector),
+        vectorJson,
       );
     } catch (err) {
-      // Old chunks embedded with the previous local model have a different
-      // vector dimension and cannot be compared — they must be re-indexed.
       if (String((err as Error).message).includes('different vector dimensions')) {
         this.logger.error(
           'Stale embeddings detected (dimension mismatch). Delete old chunks and re-upload documents.',
         );
-        return {
-          answer:
-            'The document index is outdated and needs to be rebuilt. Please re-upload the library documents.',
-          sources: [],
-        };
+      } else {
+        throw err;
       }
-      throw err;
     }
 
-    if (!results || results.length === 0) {
+    try {
+      knowledgeResults = await this.prisma.$queryRawUnsafe(
+        `SELECT id, content, "entityType", "entityId",
+                1 - (embedding <=> $1::vector) AS score
+         FROM "KnowledgeChunk"
+         WHERE embedding IS NOT NULL
+         ORDER BY embedding <=> $1::vector
+         LIMIT 5`,
+        vectorJson,
+      );
+    } catch (err) {
+      if (!String((err as Error).message).includes('different vector dimensions')) {
+        throw err;
+      }
+    }
+
+    if ((!docResults || docResults.length === 0) && (!knowledgeResults || knowledgeResults.length === 0)) {
       return {
         answer:
           "I couldn't find relevant information in the library documents. Please try rephrasing your question.",
@@ -187,10 +200,16 @@ export class RagService {
       };
     }
 
-    // 3. Build context from retrieved chunks
-    const context = results
-      .map((r, i) => `[${i + 1}] ${r.content}`)
+    // 3. Build context from retrieved chunks (documents + knowledge entities)
+    const docContext = docResults
+      .map((r, i) => `[Doc ${i + 1}] ${r.content}`)
       .join('\n\n');
+
+    const knowledgeContext = knowledgeResults
+      .map((r, i) => `[${r.entityType} ${i + 1}] ${r.content}`)
+      .join('\n\n');
+
+    const context = [docContext, knowledgeContext].filter(Boolean).join('\n\n');
 
     const dataSnapshot = this.buildDataContext(dataContext);
 
@@ -210,15 +229,131 @@ export class RagService {
       (choiceMsg as any)?.reasoning ||
       'No answer returned.';
 
-    const sources = results.map((r) => ({
-      documentId: r.documentId,
-      documentName: r.documentName,
-      snippet: String(r.content).substring(0, 200) + '...',
-      page: r.page,
-      score: parseFloat(String(r.score)),
-    }));
+    const sources = [
+      ...docResults.map((r: Record<string, unknown>) => ({
+        documentId: r.documentId,
+        documentName: r.documentName,
+        snippet: String(r.content).substring(0, 200) + '...',
+        page: r.page,
+        score: parseFloat(String(r.score)),
+      })),
+      ...knowledgeResults.map((r: Record<string, unknown>) => ({
+        entityType: r.entityType,
+        entityId: r.entityId,
+        snippet: String(r.content).substring(0, 200) + '...',
+        score: parseFloat(String(r.score)),
+      })),
+    ];
 
     return { answer, sources };
+  }
+
+  // ─── ENTITY EMBEDDING (auto-embed on data entry) ──────────────────────────
+
+  async embedBook(book: {
+    id: string;
+    title: string;
+    isbn: string;
+    publishedYear: number;
+    totalCopies: number;
+    availableCopies: number;
+    shelfLocation?: string | null;
+    language?: string;
+    pages?: number | null;
+    description?: string | null;
+    rating?: number;
+    author?: { name: string } | null;
+    category?: { name: string } | null;
+    publisher?: { name: string } | null;
+  }): Promise<void> {
+    const text = [
+      `Title: ${book.title}`,
+      `Author: ${book.author?.name ?? 'Unknown'}`,
+      `Category: ${book.category?.name ?? 'Unknown'}`,
+      `Publisher: ${book.publisher?.name ?? 'Unknown'}`,
+      `ISBN: ${book.isbn}`,
+      `Published: ${book.publishedYear}`,
+      `Language: ${book.language ?? 'English'}`,
+      book.pages ? `Pages: ${book.pages}` : null,
+      `Copies: ${book.availableCopies}/${book.totalCopies} available`,
+      book.shelfLocation ? `Shelf: ${book.shelfLocation}` : null,
+      book.rating ? `Rating: ${book.rating}/5` : null,
+      book.description ? `Description: ${book.description}` : null,
+    ]
+      .filter(Boolean)
+      .join('. ');
+
+    await this.upsertKnowledgeChunk('book', book.id, text);
+  }
+
+  async embedAuthor(author: {
+    id: string;
+    name: string;
+    country?: string | null;
+    bio?: string | null;
+  }): Promise<void> {
+    const text = [
+      `Author: ${author.name}`,
+      author.country ? `Country: ${author.country}` : null,
+      author.bio ? `Bio: ${author.bio}` : null,
+    ]
+      .filter(Boolean)
+      .join('. ');
+
+    await this.upsertKnowledgeChunk('author', author.id, text);
+  }
+
+  async embedCategory(category: {
+    id: string;
+    name: string;
+    description?: string | null;
+  }): Promise<void> {
+    const text = [
+      `Category: ${category.name}`,
+      category.description ? `Description: ${category.description}` : null,
+    ]
+      .filter(Boolean)
+      .join('. ');
+
+    await this.upsertKnowledgeChunk('category', category.id, text);
+  }
+
+  async removeEntityEmbedding(entityType: string, entityId: string): Promise<void> {
+    await this.prisma.$executeRawUnsafe(
+      `DELETE FROM "KnowledgeChunk" WHERE "entityType" = $1 AND "entityId" = $2`,
+      entityType,
+      entityId,
+    );
+  }
+
+  private async upsertKnowledgeChunk(
+    entityType: string,
+    entityId: string,
+    content: string,
+  ): Promise<void> {
+    if (!this.openrouter) {
+      this.logger.warn('OpenRouter not configured — skipping entity embedding');
+      return;
+    }
+
+    try {
+      const [vector] = await this.embedBatch([content]);
+
+      await this.prisma.$executeRawUnsafe(
+        `INSERT INTO "KnowledgeChunk" (id, "entityType", "entityId", content, embedding, "createdAt", "updatedAt")
+         VALUES (gen_random_uuid(), $1, $2, $3, $4::vector, NOW(), NOW())
+         ON CONFLICT ("entityType", "entityId")
+         DO UPDATE SET content = $3, embedding = $4::vector, "updatedAt" = NOW()`,
+        entityType,
+        entityId,
+        content,
+        JSON.stringify(vector),
+      );
+
+      this.logger.log(`Embedded ${entityType}:${entityId}`);
+    } catch (err) {
+      this.logger.error(`Failed to embed ${entityType}:${entityId}: ${(err as Error).message}`);
+    }
   }
 
   // ─── HELPERS ──────────────────────────────────────────────────────────────

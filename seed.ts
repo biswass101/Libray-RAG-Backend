@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import OpenAI from 'openai';
 
 const prisma = new PrismaClient();
 
@@ -296,6 +297,112 @@ async function main() {
     `Demo data ready: ${categories.length} categories, ${authors.length} authors, ` +
     `${publishers.length} publishers, ${shelfSlots.length} shelf slots, ${books.length} books, ${members.length} members.`,
   );
+
+  // ─── VECTOR EMBEDDINGS FOR RAG ─────────────────────────────────────────────
+
+  const apiKey = process.env.OPENROUTER_API_KEY ?? '';
+  const embeddingModel = process.env.OPENROUTER_EMBEDDING_MODEL ?? 'text-embedding-3-small';
+
+  if (!apiKey) {
+    console.log('⚠ OPENROUTER_API_KEY not set — skipping vector embeddings.');
+    return;
+  }
+
+  const openrouter = new OpenAI({
+    apiKey,
+    baseURL: 'https://openrouter.ai/api/v1',
+    defaultHeaders: {
+      'HTTP-Referer': 'https://library-rag.app',
+      'X-Title': 'Library RAG',
+    },
+  });
+
+  async function embedBatch(texts: string[]): Promise<number[][]> {
+    const input = texts.map((t) => t.replace(/\n/g, ' ').trim() || ' ');
+    const response = await openrouter.embeddings.create({ model: embeddingModel, input });
+    return response.data
+      .sort((a, b) => a.index - b.index)
+      .map((d) => d.embedding as number[]);
+  }
+
+  async function upsertKnowledge(entityType: string, entityId: string, content: string, vector: number[]) {
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO "KnowledgeChunk" (id, "entityType", "entityId", content, embedding, "createdAt", "updatedAt")
+       VALUES (gen_random_uuid(), $1, $2, $3, $4::vector, NOW(), NOW())
+       ON CONFLICT ("entityType", "entityId")
+       DO UPDATE SET content = $3, embedding = $4::vector, "updatedAt" = NOW()`,
+      entityType,
+      entityId,
+      content,
+      JSON.stringify(vector),
+    );
+  }
+
+  console.log('Generating vector embeddings for library data...');
+
+  // Embed books
+  const booksWithRelations = await prisma.book.findMany({
+    include: {
+      author: { select: { name: true } },
+      category: { select: { name: true } },
+      publisher: { select: { name: true } },
+    },
+  });
+
+  const bookTexts = booksWithRelations.map((book) =>
+    [
+      `Title: ${book.title}`,
+      `Author: ${book.author.name}`,
+      `Category: ${book.category.name}`,
+      `Publisher: ${book.publisher.name}`,
+      `ISBN: ${book.isbn}`,
+      `Published: ${book.publishedYear}`,
+      `Language: ${book.language}`,
+      book.pages ? `Pages: ${book.pages}` : null,
+      `Copies: ${book.availableCopies}/${book.totalCopies} available`,
+      book.shelfLocation ? `Shelf: ${book.shelfLocation}` : null,
+      book.rating ? `Rating: ${book.rating}/5` : null,
+      book.description ? `Description: ${book.description}` : null,
+    ]
+      .filter(Boolean)
+      .join('. '),
+  );
+
+  const bookVectors = await embedBatch(bookTexts);
+  for (let i = 0; i < booksWithRelations.length; i++) {
+    await upsertKnowledge('book', booksWithRelations[i].id, bookTexts[i], bookVectors[i]);
+  }
+  console.log(`  ✓ Embedded ${booksWithRelations.length} books`);
+
+  // Embed authors
+  const allAuthors = await prisma.author.findMany();
+  const authorTexts = allAuthors.map((a) =>
+    [`Author: ${a.name}`, a.country ? `Country: ${a.country}` : null, a.bio ? `Bio: ${a.bio}` : null]
+      .filter(Boolean)
+      .join('. '),
+  );
+
+  const authorVectors = await embedBatch(authorTexts);
+  for (let i = 0; i < allAuthors.length; i++) {
+    await upsertKnowledge('author', allAuthors[i].id, authorTexts[i], authorVectors[i]);
+  }
+  console.log(`  ✓ Embedded ${allAuthors.length} authors`);
+
+  // Embed categories
+  const allCategories = await prisma.category.findMany();
+  const categoryTexts = allCategories.map((c) =>
+    [`Category: ${c.name}`, c.description ? `Description: ${c.description}` : null]
+      .filter(Boolean)
+      .join('. '),
+  );
+
+  const categoryVectors = await embedBatch(categoryTexts);
+  for (let i = 0; i < allCategories.length; i++) {
+    await upsertKnowledge('category', allCategories[i].id, categoryTexts[i], categoryVectors[i]);
+  }
+  console.log(`  ✓ Embedded ${allCategories.length} categories`);
+
+  console.log('Vector embedding complete — RAG is ready for semantic search.');
 }
 
 main()
