@@ -71,9 +71,9 @@ export class AuthService {
       throw new UnauthorizedException('User not found');
     }
 
-    if (user.role.name === 'demo') {
-      throw new ForbiddenException('Demo accounts cannot change their password');
-    }
+    // if (user.role.name === 'demo') {
+    //   throw new ForbiddenException('Demo accounts cannot change their password');
+    // }
 
     const isCurrentPasswordValid = await bcrypt.compare(changePasswordDto.currentPassword, user.password);
     if (!isCurrentPasswordValid) {
