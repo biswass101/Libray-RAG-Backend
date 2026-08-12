@@ -1,6 +1,6 @@
-import { Controller, Post, Body, HttpCode, HttpStatus, UseGuards } from '@nestjs/common';
+import { Controller, Post, Body, HttpCode, HttpStatus, UseGuards, Patch } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import { ChangePasswordDto, LoginDto, RegisterDto } from './dto/auth.dto';
+import { ChangePasswordDto, LoginDto, RegisterDto, UpdateProfileDto } from './dto/auth.dto';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -33,11 +33,27 @@ export class AuthController {
   @ApiOperation({ summary: 'Change the authenticated user password' })
   @ApiResponse({ status: 200, description: 'Password updated successfully' })
   @ApiResponse({ status: 401, description: 'Invalid current password or authentication failed' })
+  @ApiResponse({ status: 403, description: 'Demo accounts cannot change their password' })
   changePassword(@CurrentUser() user: { sub?: string; id?: string }, @Body() changePasswordDto: ChangePasswordDto) {
     const userId = user?.sub ?? user?.id;
     if (!userId) {
       throw new Error('Authenticated user id is missing');
     }
     return this.authService.changePassword(userId, changePasswordDto);
+  }
+
+  @Patch('profile')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Update the authenticated user profile' })
+  @ApiResponse({ status: 200, description: 'Profile updated successfully' })
+  @ApiResponse({ status: 401, description: 'Authentication failed' })
+  @ApiResponse({ status: 403, description: 'Demo accounts cannot modify their profile' })
+  updateProfile(@CurrentUser() user: { sub?: string; id?: string }, @Body() updateProfileDto: UpdateProfileDto) {
+    const userId = user?.sub ?? user?.id;
+    if (!userId) {
+      throw new Error('Authenticated user id is missing');
+    }
+    return this.authService.updateProfile(userId, updateProfileDto);
   }
 }

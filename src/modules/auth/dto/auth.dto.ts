@@ -39,3 +39,22 @@ export class ChangePasswordDto {
   @MinLength(6)
   newPassword: string;
 }
+
+export class UpdateProfileDto {
+  @ApiProperty({ example: 'John Doe', required: false })
+  @IsString()
+  @IsNotEmpty()
+  name?: string;
+
+  @ApiProperty({ example: 'john@example.com', required: false })
+  @IsEmail()
+  email?: string;
+
+  @ApiProperty({ example: '+1234567890', required: false })
+  @IsString()
+  phone?: string;
+
+  @ApiProperty({ example: 'A passionate reader', required: false })
+  @IsString()
+  bio?: string;
+}

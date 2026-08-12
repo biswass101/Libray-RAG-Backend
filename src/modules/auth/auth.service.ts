@@ -1,8 +1,8 @@
-import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
-import { ChangePasswordDto, LoginDto, RegisterDto } from './dto/auth.dto';
+import { ChangePasswordDto, LoginDto, RegisterDto, UpdateProfileDto } from './dto/auth.dto';
 import { ConfigService } from '@nestjs/config';
 
 @Injectable()
@@ -62,10 +62,17 @@ export class AuthService {
   }
 
   async changePassword(userId: string, changePasswordDto: ChangePasswordDto) {
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { role: true },
+    });
 
     if (!user) {
       throw new UnauthorizedException('User not found');
+    }
+
+    if (user.role.name === 'demo') {
+      throw new ForbiddenException('Demo accounts cannot change their password');
     }
 
     const isCurrentPasswordValid = await bcrypt.compare(changePasswordDto.currentPassword, user.password);
@@ -85,6 +92,30 @@ export class AuthService {
     });
 
     return { message: 'Password updated successfully' };
+  }
+
+  async updateProfile(userId: string, updateProfileDto: UpdateProfileDto) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { role: true },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    if (user.role.name === 'demo') {
+      throw new ForbiddenException('Demo accounts cannot modify their profile');
+    }
+
+    const updated = await this.prisma.user.update({
+      where: { id: userId },
+      data: updateProfileDto,
+      include: { role: true },
+    });
+
+    const { password, ...result } = updated;
+    return result;
   }
 
   private generateTokens(userId: string, email: string, name: string, role: string) {
