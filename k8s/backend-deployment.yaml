@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: backend
+  namespace: lrag
+
+spec:
+  replicas: 2
+
+  selector:
+    matchLabels:
+      app: backend
+
+  template:
+    metadata:
+      labels:
+        app: backend
+
+    spec:
+      containers:
+        - name: backend
+
+          image: biwass101/library-backend:1.0
+
+          ports:
+            - containerPort: 4000
+
+          envFrom:
+            - secretRef:
+                name: backend-secret
+
+          env:
+            - name: NODE_ENV
+              value: "production"
+
+            - name: PORT
+              value: "4000"
+
+            - name: JWT_ACCESS_EXPIRES_IN
+              value: "7d"
+
+            - name: JWT_REFRESH_EXPIRES_IN
+              value: "15d"
+
+            - name: OPENROUTER_MODEL
+              value: "openai/gpt-4o-mini"
+
+            - name: OPENROUTER_EMBEDDING_MODEL
+              value: "text-embedding-3-small"
+
+            - name: CORS_ORIGINS
+              value: "http://43.204.109.38"
